@@ -425,7 +425,8 @@ func TestMultipleGlobals(t *testing.T) {
 	result := runComplete(c, fmt.Sprintf("adb -s %s uninstall -s %s path ", testIp, anotherIp), -1)
 	globalArgsForDashS := <-ch
 
-	if !equalSlices([]string{testIp, anotherIp}, globalArgsForDashS) {
+	sort.Strings(globalArgsForDashS)
+	if !equalSlices([]string{anotherIp, testIp}, globalArgsForDashS) {
 		t.Error("The global arguments did not match")
 	}
 	if len(result) != 1 || result[0] != "hello" {
