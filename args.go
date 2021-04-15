@@ -23,6 +23,9 @@ type Args struct {
 	// If the last character in the command line is space, this would be the
 	// last word, otherwise, it would be the word before that.
 	LastCompleted string
+
+	// because why not
+	GlobalArguments map[string][]string
 }
 
 // Directory gives the directory of the current written
@@ -56,6 +59,7 @@ func newArgs(line string) Args {
 		Completed:     completed,
 		Last:          last(parts),
 		LastCompleted: last(completed),
+		GlobalArguments: make(map[string][]string),
 	}
 }
 
@@ -96,6 +100,17 @@ func (a Args) from(i int) Args {
 		i = len(a.Completed) - 1
 	}
 	a.Completed = a.Completed[i+1:]
+	return a
+}
+
+func (a Args) with(args globalArgs) Args {
+	m := make(map[string][]string)
+	for s, set := range args {
+		for v := range set {
+			m[s] = append(m[s], v)
+		}
+	}
+	a.GlobalArguments = m
 	return a
 }
 

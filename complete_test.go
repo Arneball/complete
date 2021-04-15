@@ -374,6 +374,65 @@ func TestCompleter_Complete_SharedPrefix(t *testing.T) {
 	}
 }
 
+func TestBringingSomeContext(t *testing.T) {
+	ch := make(chan string, 1)
+	const testIp = "192.168.1.219"
+	command := Command{
+		GlobalFlags: Flags{
+			"-s": PredictSet(testIp),
+		},
+		Sub: Commands{
+			"uninstall": Command{
+				Args: PredictFunc(func(args Args) []string {
+					ch <- args.GlobalArguments["-s"][0]
+					return nil
+				}),
+			},
+		},
+	}
+	c := New("adb", command)
+	runComplete(c, "adb -s "+testIp+" uninstall ", -1)
+	if <-ch != testIp {
+		t.Error("Did not successfully get global arguments with us")
+	}
+}
+
+func TestMultipleGlobals(t *testing.T) {
+	ch := make(chan []string, 1)
+	const testIp = "192.168.1.219"
+	const anotherIp = "10.0.0.1"
+	command := Command{
+		GlobalFlags: Flags{
+			"-s": PredictSet(testIp),
+		},
+		Sub: Commands{
+			"uninstall": Command{
+				GlobalFlags: Flags{
+					"-s": PredictSet(anotherIp),
+				},
+				Sub: Commands{
+					"path": Command{
+						Args: PredictFunc(func(args Args) []string {
+							ch <- args.GlobalArguments["-s"]
+							return []string{"hello"}
+						}),
+					},
+				},
+			},
+		},
+	}
+	c := New("adb", command)
+	result := runComplete(c, fmt.Sprintf("adb -s %s uninstall -s %s path ", testIp, anotherIp), -1)
+	globalArgsForDashS := <-ch
+
+	if !equalSlices([]string{testIp, anotherIp}, globalArgsForDashS) {
+		t.Error("The global arguments did not match")
+	}
+	if len(result) != 1 || result[0] != "hello" {
+		t.Error("Last command did not successfully predict")
+	}
+}
+
 // runComplete runs the complete login for test purposes
 // it gets the complete struct and command line arguments and returns
 // the complete options

@@ -24,7 +24,7 @@ type Command struct {
 
 // Predict returns all possible predictions for args according to the command struct
 func (c *Command) Predict(a Args) []string {
-	options, _ := c.predict(a)
+	options, _ := c.predict(a, make(globalArgs))
 	return options
 }
 
@@ -57,11 +57,43 @@ func (f Flags) Predict(a Args) (prediction []string) {
 	return
 }
 
+func (f Flags) valueOf(a Args) map[string][]string {
+	m := make(map[string][]string)
+	for index, value := range a.All {
+		for key, predictor := range f {
+			if key == value {
+				var out []string
+				if predictor != nil {
+					out = predictor.Predict(a.from(index))
+				}
+				m[key] = append(m[key], out...)
+			}
+		}
+	}
+	return m
+}
+
+type (
+	stringSet map[string]bool
+	globalArgs map[string]stringSet
+)
+
 // predict options
 // only is set to true if no more options are allowed to be returned
 // those are in cases of special flag that has specific completion arguments,
 // and other flags or sub commands can't come after it.
-func (c *Command) predict(a Args) (options []string, only bool) {
+func (c *Command) predict(a Args, globalArguments globalArgs) (options []string, only bool) {
+	newArgs := c.GlobalFlags.valueOf(a)
+	for k, vs := range newArgs {
+		innerMap := globalArguments[k]
+		if innerMap == nil {
+			innerMap = make(stringSet)
+			globalArguments[k] = innerMap
+		}
+		for _, v := range vs {
+			innerMap[v] = true
+		}
+	}
 
 	// search sub commands for predictions first
 	subCommandFound := false
@@ -70,7 +102,7 @@ func (c *Command) predict(a Args) (options []string, only bool) {
 			subCommandFound = true
 
 			// recursive call for sub command
-			options, only = cmd.predict(a.from(i))
+			options, only = cmd.predict(a.from(i).with(globalArguments), globalArguments)
 			if only {
 				return
 			}
@@ -84,7 +116,8 @@ func (c *Command) predict(a Args) (options []string, only bool) {
 	// if last completed word is a global flag that we need to complete
 	if predictor, ok := c.GlobalFlags[a.LastCompleted]; ok && predictor != nil {
 		Log("Predicting according to global flag %s", a.LastCompleted)
-		return predictor.Predict(a), true
+		result := predictor.Predict(a)
+		return result, true
 	}
 
 	options = append(options, c.GlobalFlags.Predict(a)...)
